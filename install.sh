@@ -10,10 +10,21 @@ usermod -a -G bind app
 #set owner for app folder 
 chown app:app /home/ddns/app
 
+#change owner of rndc key
+chown root:bind /etc/bind/rndc.key
+
+#add control with rndc
+cat <<'EOT' >> /etc/bind/named.conf
+include "/etc/bind/rndc.key";
+controls {
+        inet 127.0.0.1 allow { localhost; } keys { "rndc-key"; };
+};
+EOT
+
 #BIND9 startup
 mkdir -p /etc/service/bind
 cat <<'EOT' > /etc/service/bind/run
-#!/bin/sh
+#!/bin/bash
 exec /usr/sbin/named -u bind -g 2>&1
 EOT
 
