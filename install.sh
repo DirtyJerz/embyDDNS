@@ -7,7 +7,7 @@ rm -rf /etc/service/sshd /etc/my_init.d/00_regen_ssh_host_keys.sh
 #add app user to bind group
 usermod -a -G bind app
 
-#set owner for app folder 
+#set owner for app folder
 chown app:app /home/ddns/app
 
 #change owner of rndc key
@@ -25,9 +25,11 @@ EOT
 mkdir -p /etc/service/bind
 cat <<'EOT' > /etc/service/bind/run
 #!/bin/bash
-exec /usr/sbin/named -u bind -g 2>&1
+exec /usr/sbin/named -u bind -g
 EOT
 
+#derp make it executable
+chmod +x /etc/service/bind/run
 
 #runonce config script
 cat <<'EOT' > /etc/my_init.d/runonce.sh
