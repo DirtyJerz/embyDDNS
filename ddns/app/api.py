@@ -54,6 +54,8 @@ def register():
 	except dns.resolver.NXDOMAIN:
 		#New registration: 
 		#Add key to file
+		if jtw[1]['hostname'] + '.' + domain in open('/etc/bind/'+domain+'.keys','a').read():
+			return 'hostname already exists', 409
 		with open('/etc/bind/'+domain+'.keys','a') as f:
 			f.write('key \"{0}\" '.format(jwt[1]['hostname'] + '.'+ domain) + '{\n')
 			f.write('\talgorithm {0};'.format(jwt[1]['alg']) + '\n')
