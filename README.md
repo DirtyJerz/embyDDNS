@@ -1,5 +1,7 @@
 # embyDDNS
 
+[![Join the chat at https://gitter.im/DirtyJerz/embyDDNS](https://badges.gitter.im/DirtyJerz/embyDDNS.svg)](https://gitter.im/DirtyJerz/embyDDNS?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 embyDDNS is a Docker container based off of the phusion-passenger image that contains a BIND9 server and the necessary API to interact with LetsEncrypt.org to obtain an SSL/TLS certificate for client EmbyServers.
 
 
