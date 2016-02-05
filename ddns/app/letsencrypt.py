@@ -1,19 +1,18 @@
 #!/usr/bin/python
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization, hashes, hmac, padding
+import os, sys, sqlite3, base64, json, copy, subprocess, binascii, sys
+import OpenSSL, acme.client, acme.messages
 from datetime import datetime
 from datetime import timedelta
 from urllib2 import urlopen
-import sqlite3, base64, json, copy, subprocess, binascii
-import acme.client
-import acme.messages
-import acme.challenges
+#from acme import jose, client, messages, challenges
 from acme import jose
 from app import domain
-CA = "https://acme-staging.api.letsencrypt.org/directory"
+
+#CA = "https://acme-staging.api.letsencrypt.org/directory"
 #CA = "https://acme-v01.api.letsencrypt.org/directory"
-TERMS = "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
+CA = "http://127.0.0.1:4000/directory"
+TERMS = "http://127.0.0.1:4001/terms/v1"
+#TERMS = "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 
 DOMAIN='.' + domain
 
@@ -26,14 +25,10 @@ def _b64(b):
 #get a keypair for the user
 #openssl genrsa 4096 > account.key
 def _generateKeypair():
-	key = rsa.generate_private_key(
-			public_exponent=65537,
-			key_size=ACCOUNT_KEY_SIZE,
-			backend=default_backend())
-	pem = key.private_bytes(
-			encoding=serialization.Encoding.PEM,
-			format=serialization.PrivateFormat.PKCS8,
-			encryption_algorithm=serialization.NoEncryption(),)
+	key = OpenSSL.crypto.PKey()
+	key.generate_key(OpenSSL.crypto.TYPE_RSA, ACCOUNT_KEY_SIZE)
+	pem = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, key)
+	print pem
 	return base64.b64encode(pem)
 
 #store keypair for the user
@@ -67,14 +62,14 @@ def _recallHost(hostname):
 
 def _send_signed_request(url, payload, hostname):
 		info = _recallHost(hostname)
-		key=serialization.load_pem_private_key(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
-		print key.private_numbers.e
+		key=OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, base64.b64decode(info['acct_privkey']))
+		print key.keydata()
 		header = {
 		"alg": "RS256",
 		"jwk": {
-				"e": _b64(key.private_numbers().e),
+				"e": _b64(key.e),
 				"kty": "RSA",
-				"n": _b64(key.private_numbers.n),
+				"n": _b64(key.n),
 			},
 		}
 		payload64 = _b64(json.dumps(payload).encode('utf8'))
@@ -92,8 +87,9 @@ def _register(hostname):
 	if info == None:
 		_storeKeypair(hostname, _generateKeypair(), _generateKeypair())
 		info = _recallHost(hostname)
-	key = serialization.load_pem_private_key(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
+	key = OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, base64.b64decode(info['acct_privkey']))
 	client = acme.client.Client(CA,jose.JWKRSA(key=jose.ComparableRSAKey(key)))
+	print client
 	if info['reg_json'] == None:
 		# Create a new registration.
 		print ("Registering a new account with Let's Encrypt.")
@@ -218,37 +214,40 @@ def getDNSToken(hostname):
 		
 		return {'Error':'No DNS-01 challenge received'}
 	except Exception, e:
+		exc_type, exc_obj, exc_tb = sys.exc_info()
+		fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+		print(exc_type, fname, exc_tb.tb_lineno)
 		return {'Error':e.message}
 
 		
 def submit_domain_validation(hostname):
-	try:
-		_register(hostname)
-		_getChallenges(hostname)
-		info = _recallHost(hostname)
-		key = serialization.load_pem_private_key(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
-		client = acme.client.Client(CA,jose.JWKRSA(key=jose.ComparableRSAKey(key)))
-		regr = acme.messages.RegistrationResource.json_loads(info['reg_json'])
-		authz = json.loads(info['authz_json'])
-		answer={}
-		for i in range(len(authz)):
-			for j in range(len(authz[i]['body']['challenges'])):
-				if authz[i]['body']['challenges'][j]['type'] == "dns-01":
-					answer=authz[i]['body']['challenges'][j]
-					jwk=jose.jwk.JWK.load(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
-					h = hmac.HMAC(key.private_bytes(encoding=serialization.Encoding.DER, format=serialization.PrivateFormat.TraditionalOpenSSL, encryption_algorithm=serialization.NoEncryption()), hashes.SHA256(), backend=default_backend())
-					h.update(str(answer['token'] + '.' + _b64(jwk.thumbprint())))
-					keyAuthorization = _b64(h.finalize())
-					payload={"keyAuthorization":keyAuthorization}
-					code, resp=_send_signed_request(answer['uri'], payload, hostname)
-					print 'here'
-					print jws
+	# try:
+	_register(hostname)
+	_getChallenges(hostname)
+	info = _recallHost(hostname)
+	key = serialization.load_pem_private_key(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
+	client = acme.client.Client(CA,jose.JWKRSA(key=jose.ComparableRSAKey(key)))
+	regr = acme.messages.RegistrationResource.json_loads(info['reg_json'])
+	authz = json.loads(info['authz_json'])
+	answer={}
+	for i in range(len(authz)):
+		for j in range(len(authz[i]['body']['challenges'])):
+			if authz[i]['body']['challenges'][j]['type'] == "dns-01":
+				answer=authz[i]['body']['challenges'][j]
+				jwk=jose.jwk.JWK.load(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
+				h = hmac.HMAC(key.private_bytes(encoding=serialization.Encoding.DER, format=serialization.PrivateFormat.TraditionalOpenSSL, encryption_algorithm=serialization.NoEncryption()), hashes.SHA256(), backend=default_backend())
+				h.update(str(answer['token'] + '.' + _b64(jwk.thumbprint())))
+				keyAuthorization = _b64(h.finalize())
+				payload={"keyAuthorization":keyAuthorization}
+				code, resp=_send_signed_request(answer['uri'], payload, hostname)
+				print 'here'
+				print jws
 
-		
-		return {'Error':'No DNS-01 challenge received'}
-	except Exception, e:
-		print {'Er':e.message}
-		return {'Error':e.message}
+	
+	return {'Error':'No DNS-01 challenge received'}
+	# except Exception, e:
+	# 	print {'Er':e.message}
+	# 	return {'Error':e.message}
 
 
 def getCertificate(hostname):
