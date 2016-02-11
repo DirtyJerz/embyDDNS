@@ -1,3 +1,5 @@
-double check and run vigorous tests
-have someone verify crypto security
+get local boulder docker to verify DNS records. It f'n works against staging, so why not my local copy....wtf.
 
+Retrieve cert and pass it back to client.
+
+test inside ddns docker img.

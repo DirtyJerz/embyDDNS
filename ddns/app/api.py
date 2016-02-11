@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from flask import Flask, request, Response, jsonify, Blueprint
 from json import dumps, loads, JSONEncoder, JSONDecoder
-import os, sys, rsa, jose, base64, hashlib, re, subprocess, le, time
+import os, sys, rsa, jose, base64, hashlib, re, subprocess, le, time,logging, ddns
 import dns.query
 import dns.resolver
 import dns.tsigkeyring
@@ -9,6 +9,7 @@ import dns.update
 from app import domain
 
 embyapi = Blueprint('embyapi', __name__)
+logger = logging.getLogger(__name__)
 
 priv_jwk = {}
 with open('app/keys/private_key.pem') as privfile:
@@ -20,6 +21,7 @@ def pubKey():
 	with open('app/keys/public_key.pem') as publicfile:
 		keydata = publicfile.read()
 		publickey = rsa.PublicKey.load_pkcs1(keydata,'PEM')
+	logger.debug('Sending publickey')
 	return keydata
 
 #JWK claims:
@@ -35,7 +37,7 @@ def pubKey():
 #400 Bad Request
 
 @embyapi.route('/api/v0.1/register', methods=['POST']) #register IP with DDNS
-def register():
+def register_v01():
 	resp={}
 	content = request.data
 	jwt = jose.decrypt(jose.deserialize_compact(content), priv_jwk)
@@ -63,7 +65,7 @@ def register():
 			f.write('};\n')
 
 		#run rndc reconfig
-		print subprocess.call(['rndc','reload'])
+		subprocess.call(['rndc','reload'])
 
 		#Add initial A record
 		tsig = dns.tsigkeyring.from_text({jwt[1]['hostname'] + '.'+ domain: str(jwt[1]['secret'])})
@@ -83,7 +85,7 @@ def register():
 			return str(resp), 400
 
 @embyapi.route('/api/v0.1/update', methods=['POST']) #update IP with DDNS
-def update():
+def update_v01():
 	resp={}
 	content = request.data
 	jwt = jose.decrypt(jose.deserialize_compact(content), priv_jwk)
@@ -105,7 +107,7 @@ def update():
 			e=sys.exc_info()[0]
 			exc_type, exc_obj, exc_tb = sys.exc_info()
 			fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-			print(exc_type, fname, exc_tb.tb_lineno)
+			logger.debug(exc_type, fname, exc_tb.tb_lineno)
 			resp['error'] = 'DNS request failed'
 			resp['exception'] = str(e)
 			return str(resp), 400
@@ -120,13 +122,13 @@ def update():
 	except Exception, e:
 		exc_type, exc_obj, exc_tb = sys.exc_info()
 		fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-		print(exc_type, fname, exc_tb.tb_lineno)
+		logger.debug(exc_type, fname, exc_tb.tb_lineno)
 		resp['error'] = 'ERROR'
 		resp['except'] = str(e)
 		return str(resp), 400
 
 @embyapi.route('/api/v0.1/getcert', methods=['POST'])
-def getCert():
+def getCert_v01():
 	resp={}
 	content = request.data
 	jwt = jose.decrypt(jose.deserialize_compact(content), priv_jwk)
@@ -147,7 +149,7 @@ def getCert():
 		except:
 			exc_type, exc_obj, exc_tb = sys.exc_info()
 			fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-			print(exc_type, fname, exc_tb.tb_lineno)
+			logger.debug(exc_type, fname, exc_tb.tb_lineno)
 			e=sys.exc_info()[0]
 			resp['error'] = 'DNS request failed'
 			resp['exception'] = str(e)
@@ -157,7 +159,7 @@ def getCert():
 		else:
 			exc_type, exc_obj, exc_tb = sys.exc_info()
 			fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-			print(exc_type, fname, exc_tb.tb_lineno)
+			logger.debug(exc_type, fname, exc_tb.tb_lineno)
 			resp['error'] = 'DNS request failed'
 			return str(resp), 400
 	except dns.resolver.NXDOMAIN:
@@ -165,11 +167,11 @@ def getCert():
 	
 	#register and get auths for LetsEncrypt
 	keyauthorization = le.getDNSToken(jwt[1]['hostname'])
-	print keyauthorization
+	logger.debug('keyAuthorization: {}'.format(keyauthorization))
 	m=hashlib.sha256()
-	m.update(keyauthorization)
-	TXTRecord=base64.b64encode(m.digest()).replace('/','_').replace('+','-').replace('=','')
-	print TXTRecord
+	m.update(keyauthorization.encode('ascii'))
+	TXTRecord=base64.urlsafe_b64encode(m.digest()).decode('ascii').replace("=", "")
+	logger.debug('TXTRecord: {}'.format(TXTRecord))
 	if 'Error' in TXTRecord:
 		return str(TXTRecord)
 	tsig = dns.tsigkeyring.from_text({jwt[1]['hostname'] + '.' + domain: str(jwt[1]['secret'])})
@@ -180,7 +182,7 @@ def getCert():
 	except:
 		exc_type, exc_obj, exc_tb = sys.exc_info()
 		fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-		print(exc_type, fname, exc_tb.tb_lineno)
+		logger.debug(exc_type, fname, exc_tb.tb_lineno)
 		e=sys.exc_info()[0]
 		resp['error'] = 'DNS request failed'
 		resp['exception'] = str(e)
@@ -193,7 +195,7 @@ def getCert():
 		resp['respons'] = str(response)
 		return str(resp), 400
 
-	time.sleep(10)
+	time.sleep(1)
 	return str(le.submit_domain_validation(jwt[1]['hostname'])),400
 
 	#get cert
@@ -203,5 +205,84 @@ def getCert():
 	return 'Added TXTRecord',201
 
 @embyapi.route('/api/v0.1/checkhostname', methods=['POST'])
-def checkhostname():
+def checkhostname_v01():
 	return 'Not Implimented', 503
+
+
+
+@embyapi.route('/api/v0.2/register', methods=['POST']) #register IP with DDNS
+def register_v02():
+	logger.debug('Registering')
+	resp={}
+	content = request.data
+	jwt = jose.decrypt(jose.deserialize_compact(content), priv_jwk)
+	try:
+		ipaddress = jwt[1]['ipaddr']
+		hostname = jwt[1]['hostname']
+		alg = jwt[1]['alg']
+		secret = jwt[1]['secret']
+	except KeyError, e:
+		return 'KeyError', 400
+
+	if ddns.addDDNSHost(hostname, ipaddress, secret, alg)!=0:
+		return 'DDNS Error', 400
+
+	return 'OK', 201
+
+@embyapi.route('/api/v0.2/update', methods=['POST']) #update IP with DDNS
+def update_v02():
+	logger.debug('Updating')
+	resp={}
+	content = request.data
+	jwt = jose.decrypt(jose.deserialize_compact(content), priv_jwk)
+	try:
+		ipaddress = jwt[1]['ipaddr']
+		hostname = jwt[1]['hostname']
+		secret = jwt[1]['secret']
+	except KeyError, e:
+		return 'KeyError', 400
+
+	if ddns.updateDDNSHost(hostname, ipaddress, secret)!=0:
+		return 'DDNS Error', 400
+
+	return 'OK', 201
+
+
+@embyapi.route('/api/v0.2/getcert', methods=['POST'])
+def getCert_v02():
+	resp={}
+	content = request.data
+	jwt = jose.decrypt(jose.deserialize_compact(content), priv_jwk)
+	try:
+		ipaddress = jwt[1]['ipaddr']
+		hostname = jwt[1]['hostname']
+		secret = jwt[1]['secret']
+	except KeyError, e:
+		return 'KeyError', 400
+
+	#register and get txt record for DNS-01 challenge
+	TXTRecord = le.getTXTRecord(hostname)
+	if TXTRecord==1:
+		return 'TXTRecord Error', 400
+
+	if ddns.addTXTRecord(hostname,ipaddress,secret,TXTRecord)!=0:
+		return 'DDNS Error', 400
+
+	logger.info('Waiting 10s for DDNS changes to propogate.')
+	time.sleep(10)
+	
+	if le.submit_domain_validation(hostname): #submit answer to challenge
+		if le.checkAuth(hostname):#check on the status of the challenge.
+			resp=le.downloadCert(hostname)#get the LE cert and pass to client.
+			if resp['status']==200:
+				return resp['chain'], 200
+			return 'OK', 201
+	return 'Could not pass challenge', 400
+
+
+	#get cert
+	#send to user
+
+@embyapi.route('/api/v0.2/checkhostname', methods=['POST'])
+def checkhostname_v02():
+	return '', 400

@@ -13,7 +13,7 @@ RUN /pd_build/utilities.sh
 
 #   Python support.
 RUN /pd_build/python.sh
-RUN apt-get update && apt-get install -y bind9 dnsutils git python-pip python-dev build-essential autoconf libffi-dev libssl-dev nano 
+RUN apt-get update && apt-get install -y sqlite3 bind9 dnsutils git python-pip python-dev build-essential autoconf libffi-dev libssl-dev nano 
 ENV TERM=xterm
 
 #setup app

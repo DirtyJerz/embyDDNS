@@ -1,9 +1,14 @@
 #!/usr/bin/python
 from flask import Flask
-import os, sqlite3, subprocess
+import os, sqlite3, subprocess, logging, sys
 
 
 myapp = Flask(__name__)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.ERROR)
+
 domain = 'ddns.oakington.info'
 myapp.config['PROPOGATE_EXCEPTIONS'] = True
 

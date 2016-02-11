@@ -6,7 +6,7 @@ embyDDNS is a Docker container based off of the phusion-passenger image that con
 **DOES NOT ISSUE CERTIFICATES YET.**
 *Currently Let'sEncrypt does not yet have the DNS-01 challenge implemented in the production server. Once it is implemented, this repo will be updated. For now this will only act as a DDNS. Feel free to test it out and leave issues to help me make it more robust.*
 
-# Useage
+# Usage
 
 Building image (**./build.sh**):
 
