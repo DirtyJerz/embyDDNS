@@ -244,7 +244,6 @@ def update_v02():
 
 	if ddns.updateDDNSHost(hostname, ipaddress, secret)!=0:
 		return 'DDNS Error', 400
-
 	return 'OK', 201
 
 
@@ -259,6 +258,7 @@ def getCert_v02():
 		secret = jwt[1]['secret']
 	except KeyError, e:
 		return 'KeyError', 400
+
 
 	#register and get txt record for DNS-01 challenge
 	TXTRecord = le.getTXTRecord(hostname)
@@ -275,7 +275,8 @@ def getCert_v02():
 		if le.checkAuth(hostname):#check on the status of the challenge.
 			resp=le.downloadCert(hostname)#get the LE cert and pass to client.
 			if resp['status']==200:
-				return resp['chain'], 200
+				return resp['cert'], 200
+			logger.info(resp['status'])
 			return 'OK', 201
 	return 'Could not pass challenge', 400
 
@@ -285,4 +286,4 @@ def getCert_v02():
 
 @embyapi.route('/api/v0.2/checkhostname', methods=['POST'])
 def checkhostname_v02():
-	return '', 400
+	return 404

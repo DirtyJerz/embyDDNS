@@ -1,5 +1,11 @@
-get local boulder docker to verify DNS records. It f'n works against staging, so why not my local copy....wtf.
+can now complete DNS-01 challenges against local docker boulder CA.
 
-Retrieve cert and pass it back to client.
+Get cert chain as pem and store cert and chain in db. 
+
+change logistics to check if there is a valid authz/cert already for the host. If so, just post valid cert.
+
+create revoke paths in api.
+
+create renew path in api. (prior key?)
 
 test inside ddns docker img.

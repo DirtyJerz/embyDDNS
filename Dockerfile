@@ -23,6 +23,8 @@ RUN pip install -r /home/ddns/app/requirements.txt
 ADD ddns/app/__init__.py /home/ddns/app/
 ADD ddns/app/api.py /home/ddns/app/
 ADD ddns/app/le.py /home/ddns/app/
+ADD ddns/app/ddns.py /home/ddns/app/
+ADD ddns/app/db.py /home/ddns/app/
 ADD ddns/passenger_wsgi.py /home/ddns/
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import os, sys, base64, json, OpenSSL, acme.client, acme.messages, requests, logging, db, hashlib, time
+import os, sys, base64, json, OpenSSL, acme.client, acme.messages, requests, logging, db, hashlib, time, textwrap
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization, hashes
@@ -29,7 +29,7 @@ def _get_link(header, type):
 		if type in link:
 			return link[1:link.index('>')]
 
-def _send_signed_request(url, payload, hostname):
+def _send_signed_request(url, payload, hostname, headers={'Content-Type': 'application/json'}):
 	info = db.recallHost(hostname)
 	priv=OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, base64.b64decode(info['acct_privkey']))
 	key=serialization.load_pem_private_key(base64.b64decode(info['acct_privkey']), password=None, backend=default_backend()) 
@@ -41,7 +41,7 @@ def _send_signed_request(url, payload, hostname):
 	protected64 = _b64(json.dumps({"nonce":requests.get(CA).headers['Replay-Nonce'].encode('utf8')}))
 	signature64 = _b64(OpenSSL.crypto.sign(priv, str(protected64) + '.' + str(payload64), 'sha256'))
 	message=json.dumps({"header":header,"protected":protected64, "payload":payload64, "signature":signature64})
-	resp = requests.post(url, data=message, headers={'Content-Type': 'application/json'})
+	resp = requests.post(url, data=message, headers=headers)
 	return resp
 
 def _register(hostname):
@@ -121,7 +121,7 @@ def _getChallenges(hostname):
 			[ch for ch in challenges if ch.get('type') == 'dns-01'][0]
 			authz.get('body')['challenges']=challenges
 		except IndexError:
-			logger.exception("The server did not return a dns-01 challenge.")
+			logger.exception("A valid or pending dns-01 challenge was not found.")
 			logger.info("Requesting new challenges for %s." % hostname)
 			authz = client.request_domain_challenges(domain, regr.new_authzr_uri).to_json()
 		# Write a cache of challenges.
@@ -221,6 +221,7 @@ def checkAuth(hostname):
 		time.sleep(5)
 
 def downloadCert(hostname):
+	domain = hostname + DOMAIN
 	info = db.recallHost(hostname)
 	csr_key = serialization.load_pem_private_key(base64.b64decode(info['csr_privkey']),password=None, backend=default_backend())
 	key = serialization.load_pem_private_key(base64.b64decode(info['acct_privkey']),password=None, backend=default_backend())
@@ -228,29 +229,33 @@ def downloadCert(hostname):
 	authz = json.loads(info['authz_json'])
 
 	logger.info('Creating CSR')
-	(csr_pem, csr_der, csr)=generate_csr(hostname,csr_key)
+	(csr_pem, csr_der, csr)=generate_csr([domain],csr_key)
 	csr = acme.jose.util.ComparableX509(csr)
 
 	payload={
 		"resource":"new-cert",
 		"csr": _b64(csr_der)
 	}
+
 	logger.info('Requesting a certificate.')	
 	cert_response = _send_signed_request(authz['new_cert_uri'], payload, hostname)
+	#logger.info(cert_response.text)
+
 	if cert_response.status_code == 201:
-		chain = _get_link(response.headers.get('Link'), 'up')
-		if chain:
-			chain = requests.get(chain, headers=DEFAULT_HEADERS).content
-		def cert_to_pem(cert):
-			return OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
-		cert_pem = cert_to_pem(cert_response.body)
-		chain = list(map(cert_to_pem, chain))
-		db.updateHost(hostname,'certificate',cert_pem)
-		db.updateHost(hostname, 'certificate_chain', chain)
+		logger.info(cert_response.headers)
+		# chain = _get_link(cert_response.headers.get('Link'), 'up')
+		# if chain:
+		# 	chain = requests.get(chain).content
+		def cert_to_pem(der):
+			return """-----BEGIN CERTIFICATE-----\n{0}\n-----END CERTIFICATE-----""".format("\n".join(textwrap.wrap(base64.b64encode(der), 64)))
+		cert_pem = cert_to_pem(cert_response.content)
+		#chain = list(map(cert_to_pem, chain))
+		#db.updateHost(hostname,'certificate',cert_pem)
+		#db.updateHost(hostname, 'certificate_chain', chain)
 
 		return {'status': 200,
 				'cert': cert_pem,
-				'chain':chain,
+				#'chain':chain,
 		}
 	else: 
 		logger.error(cert_response.text)
@@ -267,7 +272,6 @@ def generate_csr_pyca(domains, key):
 	if sys.version_info < (3,):
 		# In Py2, pyca requires the CN to be a unicode instance.
 		domains = [domain.decode("ascii") for domain in domains]
-
 	csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
 		x509.NameAttribute(NameOID.COMMON_NAME, domains[0]),
 	])).add_extension(
@@ -275,7 +279,6 @@ def generate_csr_pyca(domains, key):
 		critical=False,
 	).sign(key, hashes.SHA256(), default_backend())
 	return csr
-
 
 def generate_csr(domains, key):
 	# Generates a CSR and returns a OpenSSL.crypto.X509Req object.
