@@ -68,6 +68,10 @@ echo "ns1		A ${PUB_IP}" >> /var/lib/bind/${DDNS}
 
 chown bind:bind /var/lib/bind/${DDNS}
 
+touch /home/ddns/app.log
+chmod 664 /home/ddns/app.log
+chown app:app /home/ddns/app.log
+
 rm /etc/my_init.d/runonce.sh
 EOT
 chmod +x /etc/my_init.d/runonce.sh

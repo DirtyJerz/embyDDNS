@@ -37,6 +37,10 @@ RUN rm /etc/nginx/sites-enabled/default
 #add web conf
 ADD ddns/api_nginx.conf /etc/nginx/sites-enabled/
 
+#preserve DDNS variable in nginx
+RUN echo "env DDNS;" > /etc/nginx/main.d/ddns.conf
+
+#Copy files in docker container
 RUN install -d -o bind -g bind -m 755 /var/run/named
 
 #run install script

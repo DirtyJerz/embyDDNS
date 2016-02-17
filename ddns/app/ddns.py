@@ -1,4 +1,4 @@
-import dns, sys, os, logging, subprocess, time
+import dns, logging, subprocess, time
 import dns.query
 import dns.resolver
 import dns.tsigkeyring
@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 # 1=Error
 def addDDNSHost(hostname, ipaddress, secret, alg):
 	#Add key to file
-	logger.debug('Adding host {}.{}'.format(hostname,domain))
 	if hostname + '.' + domain in open('/etc/bind/'+domain+'.keys','r').read():
 		logger.debug('Hostname Exists')
-		return 0 # Host already exists on DDNS
+		return 0, '' # Host already exists on DDNS
+	logger.debug('Adding host {}.{}'.format(hostname,domain))
 	with open('/etc/bind/'+domain+'.keys','a') as f:
 		f.write('key \"{0}\" '.format(hostname + '.'+ domain) + '{\n')
 		f.write('\talgorithm {0};'.format(alg) + '\n')
@@ -42,18 +42,21 @@ def updateDDNSHost(hostname, ipaddress, secret):
 		response = dns.query.tcp(action, 'ns1.' + domain) 
 		if response.rcode() == 0:
 			logger.info('\'A\' record updated for {}'.format(hostname))
-			return 0
+			return 0, ''
 		else:
-			logger.exception('DNS request failed')
-			return 1
+			logger.error('DNS request failed')
+			return 1, 'DNS request failed: {}'.format(response)
 	except dns.resolver.NXDOMAIN:
-		logger.exception('Domain does not exist on DDNS')
-		return 1
+		logger.error('Domain does not exist on DDNS')
+		return 1, 'Domain does not exist on DDNS'
+	except dns.tsig.PeerBadSignature:
+		logger.error('Client\'s private key does not match DDNS host\'s private key')
+		return 1, 'Client\'s private key does not match DDNS host\'s private key'
 	except:
-		logger.exception('DNS request failed')
-		return 1
+		logger.error('DNS request failed')
+		return 1, 'DNS request failed: {}'.format(response)
 
-def addTXTRecord(hostname,ipaddress,secret,txtrecord):
+def addTXTRecord(hostname,secret,txtrecord):
 	try:
 		tsig = dns.tsigkeyring.from_text({hostname + '.' + domain : str(secret)})
 		action = dns.update.Update(domain, keyring=tsig)
@@ -63,9 +66,9 @@ def addTXTRecord(hostname,ipaddress,secret,txtrecord):
 			logger.info('\'TXT\' record updated for {}'.format(hostname))
 			return 0
 		else:
-			logger.exception('TXT Record DDNS request failed: {}'.format(response))
+			logger.error('TXT Record DDNS request failed: {}'.format(response))
 			return 1
 	except:
-		logger.exception('DNS request failed')
+		logger.error('DNS request failed')
 		return 1
 	

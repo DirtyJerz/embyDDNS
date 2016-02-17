@@ -1,15 +1,24 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 from flask import Flask
-import os, sqlite3, subprocess, logging, sys
+import os, sqlite3, subprocess, logging, logging.handlers, sys
 
 
 myapp = Flask(__name__)
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger.setLevel(logging.DEBUG)
+fh=logging.FileHandler(filename='app.log')
+fh.setLevel(logging.DEBUG)
+sh=logging.handlers.SysLogHandler(address='/dev/log')
+logger.addHandler(fh)
+#logger.addHandler(sh)
+
 logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.ERROR)
 
-domain = 'ddns.oakington.info'
+
+#domain = 'ddns.oakington.info'
+domain = str(os.environ.get('DDNS'))
+
 myapp.config['PROPOGATE_EXCEPTIONS'] = True
 
 #check to see if we have a database yet

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import os, sys, sqlite3, base64, OpenSSL, logging
+import  sqlite3, base64, OpenSSL, logging
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,14 @@ def updateHost(hostname, field, value):
 	conn=sqlite3.connect('app/embyDDNS.db')
 	c=conn.cursor()
 	c.execute("UPDATE users SET {0} = '{1}', last_update = '{2}' WHERE hostname = '{3}';".format(field, value, datetime.now(), hostname))
+	conn.commit()
+	conn.close()
+
+#update records in the DB
+def setDBNull(hostname, field):
+	conn=sqlite3.connect('app/embyDDNS.db')
+	c=conn.cursor()
+	c.execute("UPDATE users SET {0} = null, last_update = '{1}' WHERE hostname = '{2}';".format(field, datetime.now(), hostname))
 	conn.commit()
 	conn.close()
 
