@@ -32,29 +32,10 @@ The API is laid out as follows:
 *Type=GET*
 >>returns=PEM encoded public key of server (publickeystring)
 
-
-**Register Client's Hostname**
->*url= {host}:5000/api/v0.1/register*
-*type=POST*
-
->>*returns=URL Code, Message
-201 = Hostname registered successfully
-409 = Hostname already exists. (OK) 
-400 = Bad Request, Server did not understand, (look at return message)
-
-**Update IP address**
->*url= {host}:5000/api/v0.1/update*
-*type=POST*
-
->>*returns=URL Code, Message
-201 = Hostname registered successfully
-409 = Hostname already exists. (OK) 
-400 = Bad Request, Server did not understand, (look at return message)
-
-**Get Certificate** (currently only creates DNS TXT record)
+**Get Certificate** 
 >url={host}:5000/api/v0.1/getcert*
 *type=POST*
->>*returns base64 encoded certificate in PFX format*
+>>*returns certificate in PEM format*
 
 **POST body format**
 *body=JWT with claims encrypted with server public key:*
@@ -64,15 +45,16 @@ jwk= {'k' : "publickeystring"}
 ```
 claims = {
     'hostname': "hostname",
-    'pubkey': "publickey",
+    'privkey': "privatekey",
     'alg' : "alg",
     'secret' : "secret",
     'ipaddr' : "ipaddr",
+    
 }
 ```
 Where :
 **"hostname"**= String(subdomain of user)
-**"publickey**= Base64(DER encoded client public key)
+**"privatekey"**= Base64(PEM encoded client public key)
 **"alg"**= String('hmac-md5')
 **"secret"**= Base64(MD5-HMAC of hostname signed with client's RSA private key) 
 **"ipaddr"**= String(Public IP address of subdomain trying to register with this DDNS)
